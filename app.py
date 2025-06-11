@@ -27,27 +27,15 @@ def get_image_from_url(url):
 
 
 def prepare_canvas_with_image(image, width, height, bg_color=(0, 0, 0)):
-    # Redimensiona mantendo proporção
+    # Redimensiona a imagem para ocupar todo o espaço disponível
     image = image.convert("RGBA")
-    img_ratio = image.width / image.height
-    canvas_ratio = width / height
-
-    if img_ratio > canvas_ratio:
-        new_width = width
-        new_height = int(width / img_ratio)
-    else:
-        new_height = height
-        new_width = int(height * img_ratio)
-
-    resized_img = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+    resized_img = image.resize((width, height), Image.Resampling.LANCZOS)
 
     # Cria fundo preto
     canvas = Image.new("RGBA", (width, height), bg_color + (255,))
 
-    # Centraliza a imagem
-    x = (width - new_width) // 2
-    y = (height - new_height) // 2
-    canvas.paste(resized_img, (x, y), resized_img)
+    # Cola a imagem redimensionada
+    canvas.paste(resized_img, (0, 0), resized_img)
     return canvas.convert("RGB")
 
 
