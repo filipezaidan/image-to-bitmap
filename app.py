@@ -15,7 +15,7 @@ class ImageRequest(BaseModel):
 
 
 class BitmapResponse(BaseModel):
-    bitmap: str  # Changed from List[int] to str
+    bitmap: str
     width: int
     height: int
 
@@ -26,10 +26,36 @@ def get_image_from_url(url):
     return Image.open(BytesIO(response.content))
 
 
-def convert_to_monochrome(image, width=None, height=None):
-    if width and height:
-        image = image.resize((width, height), Image.Resampling.LANCZOS)
-    bw_image = image.convert("1")  # 1-bit pixels, black and white
+def prepare_canvas_with_image(image, width, height, bg_color=(0, 0, 0)):
+    # Redimensiona mantendo proporção
+    image = image.convert("RGBA")
+    img_ratio = image.width / image.height
+    canvas_ratio = width / height
+
+    if img_ratio > canvas_ratio:
+        new_width = width
+        new_height = int(width / img_ratio)
+    else:
+        new_height = height
+        new_width = int(height * img_ratio)
+
+    resized_img = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+
+    # Cria fundo preto
+    canvas = Image.new("RGBA", (width, height), bg_color + (255,))
+
+    # Centraliza a imagem
+    x = (width - new_width) // 2
+    y = (height - new_height) // 2
+    canvas.paste(resized_img, (x, y), resized_img)
+    return canvas.convert("RGB")
+
+
+def convert_to_monochrome(image, threshold=128):
+    # Converte para escala de cinza
+    gray_image = image.convert("L")
+    # Aplica threshold (sem dithering)
+    bw_image = gray_image.point(lambda x: 255 if x > threshold else 0, "1")
     return bw_image
 
 
@@ -43,7 +69,7 @@ def image_to_bitmap_array(image):
         bit_count = 0
         for x in range(width):
             pixel = pixels[x, y]
-            bit = 0 if pixel else 1  # 0 is white, 1 is black
+            bit = 1 if pixel > 0 else 0  # 1 é branco, 0 é preto
             byte = (byte << 1) | bit
             bit_count += 1
             if bit_count == 8:
@@ -58,7 +84,6 @@ def image_to_bitmap_array(image):
 
 
 def format_bitmap_as_c_array(bitmap):
-    # Format the bitmap as a C-style array string
     hex_values = [f"0x{byte:02x}" for byte in bitmap]
     return "{" + ", ".join(hex_values) + "}"
 
@@ -67,12 +92,14 @@ def format_bitmap_as_c_array(bitmap):
 async def convert_image(request: ImageRequest):
     try:
         img = get_image_from_url(str(request.url))
-        bw_img = convert_to_monochrome(img, request.width, request.height)
+        # Prepara canvas com fundo preto e imagem centralizada
+        canvas = prepare_canvas_with_image(
+            img, request.width, request.height, bg_color=(0, 0, 0)
+        )
+        # Converte para monocromático (sem dithering, threshold 128)
+        bw_img = convert_to_monochrome(canvas, threshold=128)
         bitmap = image_to_bitmap_array(bw_img)
-
-        # Format the bitmap as a C-style array string
         formatted_bitmap = format_bitmap_as_c_array(bitmap)
-
         return BitmapResponse(
             bitmap=formatted_bitmap, width=request.width, height=request.height
         )
