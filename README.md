@@ -112,7 +112,3 @@ curl -X POST http://localhost:8000/convert \
 ## 📄 License
 
 This project is licensed under the MIT License.
-
----
-
-Let me know if you want a version in Portuguese or want to include Docker support.
